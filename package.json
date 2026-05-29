@@ -1,0 +1,21 @@
+{
+  "name": "order-replication-utility",
+  "version": "1.0.0",
+  "description": "Background service replicating Wansoft orders to a remote API",
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node --env-file=.env dist/index.js",
+    "dev": "node --env-file=.env --watch src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "node --eval \"require('node:fs').rmSync('dist',{recursive:true,force:true})\""
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.7.0"
+  }
+}
