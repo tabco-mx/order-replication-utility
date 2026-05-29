@@ -45,7 +45,7 @@ If any required variable is missing, the process throws at startup.
 ### Startup
 
 1. `config/index.ts` reads + validates env vars (throws if anything required is missing).
-2. `ensureUserId()` calls `POST {WANSOFT_BASE_URL}/webapi/SelUser` with body `"005"`
+2. `ensureUserId()` calls `POST {WANSOFT_BASE_URL}/WebApi/api/user/SelUser` with body `"005"`
    (the raw JSON-string user code) and stores the returned `Result` as `userId`.
    - Fetched once at startup.
    - Refreshed only if older than 24h.
@@ -58,12 +58,12 @@ If any required variable is missing, the process throws at startup.
 ensureUserId()                      ← refresh only if >24h old
    │
    ▼
-GET /webapi/getorders?userId=...    ← list of open orders
+POST /WebApi/api/order/getorders?userid=...    ← list of open orders
    │
    ▼
 Promise.allSettled(                 ← all orders concurrent + isolated
   orders.map(order =>
-     GET /webapi/getorderdetail?orderNumber=..&operationDate=..   ← items
+     POST /WebApi/api/order/GetOrderDetail?orderNumber=..&operationDate=..   ← items
         │
         ▼
      POST {REMOTE_API_BASE_URL}/replicate-order
@@ -86,17 +86,18 @@ log per-order result (inserted | updated | noop) + summary (ok / failed)
 
 All responses wrap their payload in `{ "Result": ... }`.
 
-**`POST /webapi/SelUser`** — body `"005"` →
+**`POST /WebApi/api/user/SelUser`** — body `"005"` →
 ```json
 { "Result": "10" }
 ```
 
-**`GET /webapi/getorders?userId=10`** →
+**`POST /WebApi/api/order/getorders?userid=10`** →
 ```json
 { "Result": [ { "OperationDate": "...", "OrderNumber": 16, "OpenedDate": "...", "TableNumber": "14", "Discount": 0, "Subtotal": 222.41, "IVA": 35.59, "IEPS": 0, "Total": 258 } ] }
 ```
 
-**`GET /webapi/getorderdetail?orderNumber=16&operationDate=...`** →
+**`POST /WebApi/api/order/GetOrderDetail?orderNumber=16&operationDate=2026-5-26`**
+(`operationDate` is the date part of `OperationDate`, no leading zeros — `2026-5-26`) →
 ```json
 { "Result": [ { "ConsecutiveId": 53206, "DishId": 47, "Quantity": 1, "Description": "CRUCIO (Chicken Bacon Burger)", "Total": 179 } ] }
 ```
