@@ -1,6 +1,7 @@
 // App bootstrap + polling loop.
 
 import { config } from "./config/index.js";
+import { logger } from "./logger/index.js";
 import { getUserId, getOrders, getOrderItems, type Order } from "./wansoft/index.js";
 import { replicateOrder } from "./replicate-order/index.js";
 
@@ -15,7 +16,7 @@ async function ensureUserId(): Promise<string> {
   if (userId === undefined || Date.now() - userIdFetchedAt > DAY_MS) {
     userId = await getUserId();
     userIdFetchedAt = Date.now();
-    console.log(`Resolved userId=${userId} for userCode=${config.WANSOFT_USER_CODE}`);
+    logger.info(`Resolved userId=${userId} for userCode=${config.WANSOFT_USER_CODE}`);
   }
   return userId;
 }
@@ -24,19 +25,19 @@ async function ensureUserId(): Promise<string> {
 async function replicateOne(order: Order): Promise<void> {
   const items = await getOrderItems(order);
   const { data } = await replicateOrder({ order, items });
-  console.log(`Order ${order.OrderNumber}: ${data.action} (order_id=${data.order_id})`);
+  logger.info(`Order ${order.OrderNumber}: ${data.action} (order_id=${data.order_id})`);
 }
 
 async function runCycle(): Promise<void> {
   if (isRunning) {
-    console.warn("Previous cycle still running, skipping this tick");
+    logger.warn("Previous cycle still running, skipping this tick");
     return;
   }
   isRunning = true;
   try {
     const id = await ensureUserId();
     const orders = await getOrders(id);
-    console.log(`Cycle start: ${orders.length} open order(s)`);
+    logger.info(`Cycle start: ${orders.length} open order(s)`);
 
     const results = await Promise.allSettled(orders.map(replicateOne));
 
@@ -47,26 +48,26 @@ async function runCycle(): Promise<void> {
         ok++;
       } else {
         failed++;
-        console.error(`Order replication failed: ${String(result.reason)}`);
+        logger.error({ err: result.reason }, "Order replication failed");
       }
     }
-    console.log(`Cycle done: ${ok} ok, ${failed} failed`);
+    logger.info(`Cycle done: ${ok} ok, ${failed} failed`);
   } catch (err) {
     // A cycle-level failure (e.g. getOrders down) — log and let the next tick retry.
-    console.error(`Cycle aborted: ${String(err)}`);
+    logger.error({ err }, "Cycle aborted");
   } finally {
     isRunning = false;
   }
 }
 
 async function main(): Promise<void> {
-  console.log(`Starting order replication, interval=${config.REPLICATION_INTERVAL_MS}ms`);
+  logger.info(`Starting order replication, interval=${config.REPLICATION_INTERVAL_MS}ms`);
   await ensureUserId(); // fail fast at startup if Wansoft is unreachable
   await runCycle();
   setInterval(runCycle, config.REPLICATION_INTERVAL_MS);
 }
 
 main().catch((err) => {
-  console.error(`Fatal startup error: ${String(err)}`);
+  logger.error({ err }, "Fatal startup error");
   process.exit(1);
 });

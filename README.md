@@ -11,7 +11,7 @@ order never blocks the others.
 - Node.js 24 LTS
 - TypeScript, ESM (`"type": "module"`)
 - Native `fetch`, native `--env-file` env loading
-- No runtime dependencies
+- [pino](https://getpino.io) logging (pretty output in dev, JSON in production)
 
 ## Project Structure
 
@@ -22,6 +22,7 @@ order-replication-utility/
   .env.example
   src/
     config/index.ts          # env parsing + validation (throws on startup if missing)
+    logger/index.ts           # pino logger (pretty in dev, JSON in prod)
     wansoft/index.ts          # local Wansoft API client
     replicate-order/index.ts  # remote API client
     index.ts                  # bootstrap + polling loop
@@ -39,6 +40,8 @@ If any required variable is missing, the process throws at startup.
 | `REMOTE_API_BASE_URL`     | yes      | —       | Remote API base URL                      |
 | `REMOTE_API_TOKEN`        | yes      | —       | Bearer token for the remote API          |
 | `REPLICATION_INTERVAL_MS` | no       | `30000` | Polling interval in milliseconds         |
+| `NODE_ENV`                | no       | —       | `production` → JSON logs; else pretty     |
+| `LOG_LEVEL`               | no       | `info`  | pino level (trace…fatal)                  |
 
 ## Flow
 
