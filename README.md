@@ -1,170 +1,134 @@
 # Order Replication Utility
 
-Background Node.js service that periodically replicates open orders from a local
-**Wansoft** API to a remote API. Every interval (default 30s) it fetches open orders,
-fetches each order's line items, and POSTs each `{ order, items }` payload to a remote
-`/replicate-order` endpoint. Replications run concurrently and in isolation — one failing
-order never blocks the others.
+A lightweight local tool that periodically replicates open orders from a local **Wansoft**
+API to a remote API, with a small web UI for monitoring and configuration.
+
+It is two processes sharing one SQLite file:
+
+- **Worker** — polls Wansoft every interval, replicates each open order to the remote
+  `/replicate-order` endpoint (concurrently, isolated — one failing order never blocks the
+  others), and writes status + logs + a heartbeat to SQLite. It re-reads config from SQLite
+  every cycle, so config edits apply on the next tick.
+- **Web** — a [Next.js](https://nextjs.org) (App Router) admin app that reads SQLite directly
+  in Server Components and mutates it via Server Actions. No REST API, no client-side fetching.
+
+SQLite is the only channel between them: the worker writes, the web app reads (and writes
+config + a restart flag). Neither process calls the other.
 
 ## Stack
 
-- Node.js 24 LTS
-- TypeScript, ESM (`"type": "module"`)
-- Native `fetch`, native `--env-file` env loading
-- [pino](https://getpino.io) logging (pretty output in dev, JSON in production)
+- Node.js 22+ · TypeScript · npm workspaces (monorepo)
+- [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) (synchronous, WAL mode)
+- [pino](https://getpino.io) logging (pretty in dev, JSON in prod), mirrored into the DB
+- [Next.js 15](https://nextjs.org) App Router — Server Components + Server Actions, Tailwind via CDN
+- [node-windows](https://github.com/coreybutler/node-windows) to run the worker as a Windows Service
 
-## Project Structure
+## Layout
 
 ```
-order-replication-utility/
-  package.json
-  tsconfig.json
-  .env.example
-  src/
-    config/index.ts          # env parsing + validation (throws on startup if missing)
-    logger/index.ts           # pino logger (pretty in dev, JSON in prod)
-    wansoft/index.ts          # local Wansoft API client
-    replicate-order/index.ts  # remote API client
-    index.ts                  # bootstrap + polling loop
+packages/
+  shared/        # @app/shared — SQLite, config, logs, replications, worker state, types
+apps/
+  worker/        # polling loop, Wansoft + remote clients, Windows-service install/uninstall
+  web/           # Next.js admin app (dashboard/logs/config/maintenance)
+tools/
+  mock-server.mjs       # fake Wansoft + remote API for local dev
+  seed-mock-config.mjs  # point config at the mock
+data/            # app.db lives here (gitignored)
 ```
+
+The web app reuses `@app/shared` for all DB access; `better-sqlite3` + `@app/shared` are listed
+in `serverExternalPackages` (`apps/web/next.config.ts`) so the native addon is never bundled,
+and DB code stays in Server Components / Server Actions (`apps/web/src/lib` is `server-only`).
 
 ## Configuration
 
-All config comes from environment variables. Copy `.env.example` to `.env` and fill in.
-If any required variable is missing, the process throws at startup.
+Config lives in the SQLite `config` table (not `.env`). Edit it on the **Config** page, or
+seed it from the CLI. Keys:
 
-| Variable                  | Required | Default | Description                              |
-| ------------------------- | -------- | ------- | ---------------------------------------- |
-| `WANSOFT_BASE_URL`        | yes      | —       | Local Wansoft API base URL               |
-| `WANSOFT_USER_CODE`       | yes      | —       | User code used to resolve the `userId`   |
-| `REMOTE_API_BASE_URL`     | yes      | —       | Remote API base URL                      |
-| `REMOTE_API_TOKEN`        | yes      | —       | Bearer token for the remote API          |
-| `REPLICATION_INTERVAL_MS` | no       | `30000` | Polling interval in milliseconds         |
-| `NODE_ENV`                | no       | —       | `production` → JSON logs; else pretty     |
-| `LOG_LEVEL`               | no       | `info`  | pino level (trace…fatal)                  |
+| Key                       | Description                            |
+| ------------------------- | -------------------------------------- |
+| `WANSOFT_BASE_URL`        | Local Wansoft API base URL             |
+| `WANSOFT_USER_CODE`       | User code used to resolve the `userId` |
+| `REMOTE_API_BASE_URL`     | Remote API base URL                    |
+| `REMOTE_API_TOKEN`        | Bearer token for the remote API        |
+| `REPLICATION_INTERVAL_MS` | Polling interval (default `30000`)     |
 
-## Flow
+`npm run seed` imports an existing root `.env` (if present) into the config table on first setup.
 
-### Startup
+## How it works
 
-1. `config/index.ts` reads + validates env vars (throws if anything required is missing).
-2. `ensureUserId()` calls `POST {WANSOFT_BASE_URL}/WebApi/api/user/SelUser` with body `"005"`
-   (the raw JSON-string user code) and stores the returned `Result` as `userId`.
-   - Fetched once at startup.
-   - Refreshed only if older than 24h.
-   - **Not** called every cycle.
-3. One cycle runs immediately, then `setInterval` repeats it every `REPLICATION_INTERVAL_MS`.
+### Worker cycle
 
-### Each polling cycle (`runCycle`)
+1. Resolve `userId` (`POST /WebApi/api/user/SelUser`), refresh if >24h old.
+2. Each interval (config re-read from SQLite each cycle): `POST /WebApi/api/order/getorders?userid=…` → open orders.
+3. `Promise.allSettled` over orders, each: fetch items
+   (`POST /WebApi/api/order/GetOrderDetail?orderNumber=…&operationDate=yyyy-M-d`) →
+   `POST {REMOTE}/replicate-order` with `Bearer` auth and `{ order, items }`.
+4. Per order it upserts a `replications` row: `pending → replicating → success | noop | failed`.
+5. At cycle end it writes a heartbeat (`last_cycle_at`, active count, last error).
 
-```
-ensureUserId()                      ← refresh only if >24h old
-   │
-   ▼
-POST /WebApi/api/order/getorders?userid=...    ← list of open orders
-   │
-   ▼
-Promise.allSettled(                 ← all orders concurrent + isolated
-  orders.map(order =>
-     POST /WebApi/api/order/GetOrderDetail?orderNumber=..&operationDate=..   ← items
-        │
-        ▼
-     POST {REMOTE_API_BASE_URL}/replicate-order
-        headers: Authorization: Bearer <token>, Content-Type: application/json
-        body:    { order, items }
-  )
-)
-   │
-   ▼
-log per-order result (inserted | updated | noop) + summary (ok / failed)
-```
+### Web (Next.js)
 
-- A slow cycle that overruns the interval is skipped via an `isRunning` guard.
-- A failed order is logged via `console.error` and does **not** stop the others.
-- Failed orders stay open in Wansoft, so they're naturally retried next cycle — no retry queue.
+All pages are Server Components reading SQLite directly; mutations are Server Actions.
 
-## API Contracts
+- **Dashboard `/`** — worker status (from heartbeat: "running" if last cycle < 2×interval,
+  else stale), totals, DB size, active + recent replications. Re-renders every 2s via a tiny
+  client `AutoRefresh` component calling `router.refresh()` (no WebSockets).
+- **Logs `/logs`** — paginated table of stored log rows (`?page&pageSize`).
+- **Config `/config`** — edit config (token field blank; left empty keeps the stored token).
+  Saving applies on the worker's next cycle — no restart.
+- **Maintenance `/maintenance`** — clear logs / replication history / all data (config kept,
+  with `VACUUM`), and a restart button.
 
-### Local Wansoft
+### Restart (no privileged calls)
 
-All responses wrap their payload in `{ "Result": ... }`.
+The web app cannot reach into the worker's loop (separate process). The restart action sets
+`restart_requested = 1` in the DB. The worker checks the flag at the top of each cycle, clears
+it, and `process.exit(0)`. The Windows Service (or the dev watcher) restarts it. Works even
+when the web app runs non-elevated; restart applies within ≤ one interval. Config changes do
+**not** need a restart — the worker re-reads config every cycle.
 
-**`POST /WebApi/api/user/SelUser`** — body `"005"` →
-```json
-{ "Result": "10" }
-```
-
-**`POST /WebApi/api/order/getorders?userid=10`** →
-```json
-{ "Result": [ { "OperationDate": "...", "OrderNumber": 16, "OpenedDate": "...", "TableNumber": "14", "Discount": 0, "Subtotal": 222.41, "IVA": 35.59, "IEPS": 0, "Total": 258 } ] }
-```
-
-**`POST /WebApi/api/order/GetOrderDetail?orderNumber=16&operationDate=2026-5-26`**
-(`operationDate` is the date part of `OperationDate`, no leading zeros — `2026-5-26`) →
-```json
-{ "Result": [ { "ConsecutiveId": 53206, "DishId": 47, "Quantity": 1, "Description": "CRUCIO (Chicken Bacon Burger)", "Total": 179 } ] }
-```
-
-### Remote
-
-**`POST /replicate-order`**
-
-Headers:
-```
-Authorization: Bearer <REMOTE_API_TOKEN>
-Content-Type: application/json
-```
-
-Body: `{ "order": { ... }, "items": [ ... ] }`
-
-Success:
-```json
-{ "data": { "action": "inserted", "changed": true, "order_id": "6658f4a49fb6f5c7f7f7dc1a" } }
-```
-
-| `data.action` | Meaning                                              | `changed` |
-| ------------- | ---------------------------------------------------- | --------- |
-| `inserted`    | No previous mapping; new order + mapping created     | `true`    |
-| `updated`     | Mapping existed but snapshot changed; order replaced | `true`    |
-| `noop`        | Mapping existed and snapshot matched; nothing changed| `false`   |
-
-Errors:
-```json
-{ "error": { "message": "OperationDate is required" } }
-```
-
-| Status | Meaning                      |
-| ------ | ---------------------------- |
-| `400`  | Invalid payload              |
-| `401`  | Invalid / missing bearer token |
-
-Every fetch checks `res.ok` and throws with the status (and the remote `error.message`
-when present), so HTTP errors are caught per-order by `Promise.allSettled`.
-
-## Getting Started
+## Local development (with mock APIs)
 
 ```bash
 npm install
-cp .env.example .env        # edit values
+npm run build
 
-npm run build               # tsc → dist/
-npm start                   # node --env-file=.env dist/index.js
-```
+# terminal 1 — fake Wansoft (:8080) + remote (:8081)
+npm run mock
 
-Development (Node 24 runs TypeScript directly, auto-restart on change):
+# point config at the mock (fast 3s interval)
+npm run mock:seed
 
-```bash
+# terminal 2 — worker (watch) + Next dev server
 npm run dev
 ```
 
-Requires Node.js 24+ (`node -v`).
+Open <http://localhost:3000>. Orders 16/17 replicate (`inserted`, then `noop` on repeat);
+order 99 always 401s so you can see an isolated failure on the dashboard. (The mock's
+`getorders` sleeps 10s, so orders visibly sit in `pending`/`replicating` first.)
+
+## Windows deployment
+
+1. Install Node 22+, then `npm install && npm run build`.
+2. Seed config: `npm run seed` (imports `.env`), or edit `/config` after first web launch.
+3. From an **elevated** prompt: `npm run worker:install` → registers the `order-worker`
+   Windows Service (auto-start on boot, auto-restart on exit). Verify in `services.msc`.
+   Remove later with `npm run worker:uninstall`.
+4. Launch the web UI when needed: `npm run web` (or double-click `web.bat`) →
+   <http://localhost:3000>. (`next start` needs a Node server — not a static export — because
+   of Server Actions + native better-sqlite3.)
+5. The DB is at `data\app.db`. node-windows also writes daemon logs under the service folder.
 
 ## Scripts
 
-| Script              | Action                                            |
-| ------------------- | ------------------------------------------------- |
-| `npm run build`     | Compile TypeScript to `dist/`                     |
-| `npm start`         | Run compiled app with `.env` loaded               |
-| `npm run dev`       | Run `src/index.ts` directly with watch + `.env`   |
-| `npm run typecheck` | Type-check without emitting                       |
-| `npm run clean`     | Remove `dist/`                                     |
+| Script                  | Action                                             |
+| ----------------------- | -------------------------------------------------- |
+| `npm run build`         | Build shared → worker → web (`next build`)         |
+| `npm run dev`           | Run worker (`--watch`) + Next dev server (:3000)   |
+| `npm run web`           | `next start` — the production web server (:3000)   |
+| `npm run worker`        | Run the worker as a plain process                  |
+| `npm run worker:install`/`:uninstall` | Register/remove the Windows Service  |
+| `npm run seed`          | Import root `.env` into the config table           |
+| `npm run mock` / `mock:seed` | Local mock APIs + point config at them        |
