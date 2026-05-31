@@ -11,7 +11,6 @@ export {
   listLogs,
   countLogs,
   getConfig,
-  getConfigRaw,
   CONFIG_KEYS,
 } from "@app/shared";
 

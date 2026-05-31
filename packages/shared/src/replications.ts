@@ -67,7 +67,11 @@ export function listFailed(limit = 20): ReplicationRow[] {
     .all(limit) as ReplicationRow[];
 }
 
-export function counts(): { totalReplicated: number; failures: number; active: number } {
+export function counts(): {
+  totalReplicated: number;
+  failures: number;
+  active: number;
+} {
   const db = openDb();
   const row = db
     .prepare(
@@ -77,7 +81,11 @@ export function counts(): { totalReplicated: number; failures: number; active: n
          SUM(CASE WHEN status IN ('pending', 'replicating') THEN 1 ELSE 0 END) AS active
        FROM replications`,
     )
-    .get() as { done: number | null; failed: number | null; active: number | null };
+    .get() as {
+    done: number | null;
+    failed: number | null;
+    active: number | null;
+  };
   return {
     totalReplicated: row.done ?? 0,
     failures: row.failed ?? 0,

@@ -27,9 +27,34 @@ async function ensureUserId(config: AppConfig): Promise<string> {
   if (userId === undefined || Date.now() - userIdFetchedAt > DAY_MS) {
     userId = await getUserId(config);
     userIdFetchedAt = Date.now();
-    logger.info(`Resolved userId=${userId} for userCode=${config.WANSOFT_USER_CODE}`);
+    logger.info(
+      `Resolved userId=${userId} for userCode=${config.WANSOFT_USER_CODE}`,
+    );
   }
   return userId;
+}
+
+function validateConfig(config: AppConfig): void {
+  const errors: string[] = [];
+  if (!config.WANSOFT_USER_CODE) {
+    errors.push("WANSOFT_USER_CODE is required");
+  }
+  if (!config.WANSOFT_BASE_URL) {
+    errors.push("WANSOFT_BASE_URL is required");
+  }
+  if (!config.REMOTE_API_BASE_URL) {
+    errors.push("REMOTE_API_BASE_URL is required");
+  }
+  if (!config.REMOTE_API_TOKEN) {
+    errors.push("REMOTE_API_TOKEN is required");
+  }
+  if (!config.REPLICATION_INTERVAL_MS) {
+    errors.push("REPLICATION_INTERVAL_MS is required");
+  }
+
+  if (errors.length > 0) {
+    throw new Error(errors.join("\n"));
+  }
 }
 
 // Fetch items for one order and replicate it. Writes status rows as it progresses.
@@ -51,10 +76,13 @@ async function replicateOne(config: AppConfig, order: Order): Promise<void> {
       remote_id: data.order_id,
       error: null,
     });
-    logger.info(`Order ${order.OrderNumber}: ${data.action} (order_id=${data.order_id})`, {
-      order_number: order.OrderNumber,
-      status: data.action,
-    });
+    logger.info(
+      `Order ${order.OrderNumber}: ${data.action} (order_id=${data.order_id})`,
+      {
+        order_number: order.OrderNumber,
+        status: data.action,
+      },
+    );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     upsertReplication({
@@ -95,6 +123,8 @@ async function runCycle(): Promise<number> {
 
     // Re-read config every cycle so UI edits apply without a restart.
     const config = getConfig();
+    validateConfig(config);
+
     intervalMs = config.REPLICATION_INTERVAL_MS;
 
     const id = await ensureUserId(config);
@@ -127,7 +157,11 @@ async function runCycle(): Promise<number> {
     lastError = err instanceof Error ? err.message : String(err);
     logger.error("Cycle aborted", { err });
   } finally {
-    updateHeartbeat({ last_cycle_at: Date.now(), active_count: activeCount, last_error: lastError });
+    updateHeartbeat({
+      last_cycle_at: Date.now(),
+      active_count: activeCount,
+      last_error: lastError,
+    });
     isRunning = false;
   }
   return intervalMs;

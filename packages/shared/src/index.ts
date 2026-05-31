@@ -3,13 +3,7 @@
 export * from "./types.js";
 export * from "./paths.js";
 export { openDb } from "./db.js";
-export {
-  CONFIG_KEYS,
-  type ConfigKey,
-  getConfig,
-  getConfigRaw,
-  setConfig,
-} from "./config.js";
+export { CONFIG_KEYS, type ConfigKey, getConfig, setConfig } from "./config.js";
 export {
   type NewLog,
   insertLog,

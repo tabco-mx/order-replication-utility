@@ -10,7 +10,7 @@ import { setConfig, getConfig } from "@app/shared";
 setConfig({
   WANSOFT_BASE_URL: `http://localhost:${process.env.WANSOFT_PORT || 8080}`,
   WANSOFT_USER_CODE: "005",
-  REMOTE_API_BASE_URL: `http://localhost:${process.env.REMOTE_PORT || 8081}`,
+  REMOTE_API_BASE_URL: `http://localhost:${process.env.REMOTE_PORT || 8888}`,
   REMOTE_API_TOKEN: "mock-token",
   REPLICATION_INTERVAL_MS: "3000",
 });

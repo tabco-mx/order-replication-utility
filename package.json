@@ -14,8 +14,6 @@
   "scripts": {
     "build": "npm run build -w @app/shared && npm run build -w @app/worker && npm run build -w @app/web",
     "dev": "concurrently -n worker,web -c blue,green \"npm run dev -w @app/worker\" \"npm run dev -w @app/web\"",
-    "web": "npm run start -w @app/web",
-    "worker": "node --env-file-if-exists=.env apps/worker/dist/index.js",
     "worker:install": "node apps/worker/dist/service-install.js",
     "worker:uninstall": "node apps/worker/dist/service-uninstall.js",
     "seed": "node apps/worker/dist/seed.js",

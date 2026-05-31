@@ -43,8 +43,3 @@ Three load-bearing decisions — preserve these:
 `config(key,value)` · `logs(...)` · `replications(order_number, operation_date, status, action,
 remote_id, error, updated_at)` · `worker_state(id=1, last_cycle_at, active_count, last_error,
 restart_requested)`. Changing `replications` ripples into the worker — avoid.
-
-## Stale leftovers (not part of the current app)
-
-`src/` (old single-app copy), root `tsconfig.json`, `ui.bat` are remnants of earlier iterations
-(the Express/HTMX UI was deleted). Safe to remove — ask first.

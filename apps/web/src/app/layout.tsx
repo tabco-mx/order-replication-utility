@@ -20,9 +20,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <script src="https://cdn.tailwindcss.com" />
       </head>
       <body className="bg-slate-100 text-slate-800">
-        <nav className="bg-slate-800">
+        <nav className="bg-slate-800 z-10 fixed top-0 w-full">
           <div className="max-w-6xl mx-auto px-4 flex items-center gap-2 h-14">
-            <span className="text-white font-semibold mr-4">Order Replication</span>
+            <span className="text-white font-semibold mr-4">
+              Order Replication
+            </span>
             {NAV.map((n) => (
               <Link
                 key={n.href}
@@ -34,7 +36,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
             ))}
           </div>
         </nav>
-        <main className="max-w-6xl mx-auto px-4 py-6">{children}</main>
+
+        {/* <main className="max-w-6xl mx-auto px-4 py-6">{children}</main> */}
+        {children}
       </body>
     </html>
   );
