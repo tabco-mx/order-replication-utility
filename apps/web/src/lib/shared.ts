@@ -5,26 +5,19 @@ import "server-only";
 import {
   openDb,
   createSqliteLogsRepo,
-  createSqliteReplicationsRepo,
+  createSqliteOrderReplicationsRepo,
   createSqliteWorkerStateRepo,
   createSqliteConfigRepo,
 } from "@app/shared";
 
-export { CONFIG_KEYS } from "@app/shared";
-
 const db = openDb();
 export const configRepo = createSqliteConfigRepo({ db });
 export const logsRepo = createSqliteLogsRepo({ db });
-export const replicationsRepo = createSqliteReplicationsRepo({ db });
+export const orderReplicationsRepo = createSqliteOrderReplicationsRepo({
+  db,
+});
 export const workerStateRepo = createSqliteWorkerStateRepo({
   db,
-  logsRepo,
-  replicationsRepo,
 });
 
-export type {
-  WorkerState,
-  ReplicationRow,
-  LogRow,
-  ConfigKey,
-} from "@app/shared";
+export type { WorkerState, Config, Log } from "@app/shared";

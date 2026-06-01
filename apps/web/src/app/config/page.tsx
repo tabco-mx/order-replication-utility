@@ -1,30 +1,33 @@
-import { configRepo, CONFIG_KEYS, type ConfigKey } from "@/lib/data";
-import { saveConfig } from "@/lib/actions";
+import { Config, configRepo } from "@/lib/shared";
+import { saveConfig } from "./_actions/save-config";
 
 export const dynamic = "force-dynamic";
 
-const FIELDS: Record<
-  ConfigKey,
-  { label: string; type: string; hint?: string }
-> = {
-  WANSOFT_BASE_URL: { label: "Wansoft base URL", type: "text" },
-  WANSOFT_USER_CODE: { label: "Wansoft user code", type: "text" },
-  REMOTE_API_BASE_URL: { label: "Remote API base URL", type: "text" },
-  REMOTE_API_TOKEN: {
+const FIELDS = [
+  { key: "wansoft_base_url", label: "Wansoft base URL", required: true },
+  {
+    key: "wansoft_user_code",
+    label: "Wansoft user code",
+    isSecret: true,
+    hint: "Leave blank to keep the current user code",
+  },
+  { key: "remote_api_base_url", label: "Remote API base URL", required: true },
+  {
+    key: "remote_api_token",
     label: "Remote API token",
-    type: "password",
+    isSecret: true,
     hint: "Leave blank to keep the current token",
   },
-  REPLICATION_INTERVAL_MS: {
+  {
+    key: "replication_interval_ms",
     label: "Replication interval (ms)",
     type: "number",
-    hint: "Default 30000",
+    required: true,
   },
-};
+];
 
 export default async function ConfigPage() {
-  const { getConfig } = configRepo;
-  const config = await getConfig();
+  const config = await configRepo.getOrCreateConfig();
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-6 h-screen pt-16 flex flex-col">
@@ -33,20 +36,21 @@ export default async function ConfigPage() {
         action={saveConfig}
         className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 max-w-xl"
       >
-        {CONFIG_KEYS.map((key) => {
-          const f = FIELDS[key];
-          // Never render the stored token; the field stays blank unless a new value is typed.
-          const value = key === "REMOTE_API_TOKEN" ? "" : config[key];
+        {FIELDS.map((f) => {
+          const value = f.isSecret ? "" : (config[f.key as keyof Config] ?? "");
+
           return (
-            <label key={key} className="block mb-4">
+            <label key={f.key} className="block mb-4">
               <span className="block text-sm font-medium text-slate-700">
                 {f.label}
+                {f.required ? "*" : null}
               </span>
               <input
-                name={key}
-                type={f.type}
+                name={f.key}
+                type={f.isSecret ? "password" : (f.type ?? "text")}
                 defaultValue={value}
                 className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                required={f.required}
               />
               {f.hint ? (
                 <span className="text-xs text-slate-400">{f.hint}</span>
@@ -54,6 +58,7 @@ export default async function ConfigPage() {
             </label>
           );
         })}
+
         <button
           type="submit"
           className="mt-2 px-4 py-2 bg-slate-900 text-white rounded-md text-sm font-medium"

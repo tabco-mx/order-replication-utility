@@ -20,10 +20,10 @@ export interface OrderItem {
   Total: number;
 }
 
-export interface ReplicateOrderResult {
+export type ReplicateOrderResult = {
   data: {
     action: "inserted" | "updated" | "noop";
     changed: boolean;
     order_id: string;
   };
-}
+};

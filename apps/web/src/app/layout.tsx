@@ -9,7 +9,6 @@ const NAV = [
   { href: "/", label: "Dashboard" },
   { href: "/logs", label: "Logs" },
   { href: "/config", label: "Config" },
-  { href: "/maintenance", label: "Maintenance" },
 ];
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -37,7 +36,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           </div>
         </nav>
 
-        {/* <main className="max-w-6xl mx-auto px-4 py-6">{children}</main> */}
         {children}
       </body>
     </html>

@@ -1,10 +1,9 @@
-import type { LogRow } from "./log-row.type.js";
-import type { NewLog } from "./new-log.type.js";
+import type { LogCreate } from "./log-create.type.js";
+import type { Log } from "./log.type.js";
 
 export interface LogsRepo {
-  insertLog: (entry: NewLog) => Promise<void>;
-  listLogs: (opts?: { limit?: number; offset?: number }) => Promise<LogRow[]>;
+  insertLog: (data: LogCreate) => Promise<void>;
+  listLogs: (opts?: { limit?: number; offset?: number }) => Promise<Log[]>;
   countLogs: () => Promise<number>;
   clearLogs: () => Promise<void>;
-  dbSizeBytes: () => Promise<number>;
 }

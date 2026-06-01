@@ -1,6 +1,6 @@
 import type { LogLevel } from "./log-level.type.js";
 
-export interface LogRow {
+export interface Log {
   id: number;
   ts: number;
   level: LogLevel;

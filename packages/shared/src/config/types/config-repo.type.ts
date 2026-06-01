@@ -1,7 +1,7 @@
-import type { AppConfig } from "./app-config.type.js";
-import type { ConfigKey } from "./config-key.type.js";
+import { ConfigUpdate } from "./config-update.type.js";
+import { Config } from "./config.type.js";
 
 export interface ConfigRepo {
-  getConfig: () => Promise<AppConfig>;
-  setConfig: (partial: Partial<Record<ConfigKey, string>>) => Promise<void>;
+  getOrCreateConfig: (data?: ConfigUpdate) => Promise<Config>;
+  updateConfig: (data: ConfigUpdate) => Promise<void>;
 }

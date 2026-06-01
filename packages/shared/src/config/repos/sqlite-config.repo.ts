@@ -1,61 +1,81 @@
 import type Database from "better-sqlite3";
-import type { AppConfig } from "../types/app-config.type.js";
-import { CONFIG_KEYS, type ConfigKey } from "../types/config-key.type.js";
+import type { Config } from "../types/config.type.js";
 import type { ConfigRepo } from "../types/config-repo.type.js";
 
-const DEFAULTS: Record<ConfigKey, string> = {
-  WANSOFT_BASE_URL: "",
-  WANSOFT_USER_CODE: "",
-  REMOTE_API_BASE_URL: "",
-  REMOTE_API_TOKEN: "",
-  REPLICATION_INTERVAL_MS: "30000",
-};
-
-export function createSqliteConfigRepo({ db }: { db: Database.Database }): ConfigRepo {
-  function getConfigRaw(): Record<ConfigKey, string> {
-    const rows = db.prepare("SELECT key, value FROM config").all() as {
-      key: string;
-      value: string;
-    }[];
-    const stored = new Map(rows.map((row) => [row.key, row.value]));
-    const out = {} as Record<ConfigKey, string>;
-    for (const key of CONFIG_KEYS) {
-      out[key] = stored.get(key) ?? DEFAULTS[key];
-    }
-    return out;
-  }
-
+export function createSqliteConfigRepo({
+  db,
+}: {
+  db: Database.Database;
+}): ConfigRepo {
   return {
-    async getConfig(): Promise<AppConfig> {
-      const raw = getConfigRaw();
+    async getOrCreateConfig(data) {
+      const tx = db.transaction(() => {
+        const row = db
+          .prepare(`SELECT * FROM config WHERE id = 1`)
+          .get() as Config | null;
 
-      const interval = Number(raw.REPLICATION_INTERVAL_MS);
-      if (!Number.isFinite(interval) || interval <= 0) {
-        throw new Error(
-          `Invalid REPLICATION_INTERVAL_MS: expected a positive number, got "${raw.REPLICATION_INTERVAL_MS}"`,
+        if (row) {
+          if (!row?.wansoft_base_url && data?.wansoft_base_url !== undefined) {
+            db.prepare(
+              `UPDATE config SET wansoft_base_url = ? WHERE id = 1`,
+            ).run(data.wansoft_base_url);
+          }
+          if (
+            !row?.wansoft_user_code &&
+            data?.wansoft_user_code !== undefined
+          ) {
+            db.prepare(
+              `UPDATE config SET wansoft_user_code = ? WHERE id = 1`,
+            ).run(data.wansoft_user_code);
+          }
+          if (
+            !row?.remote_api_base_url &&
+            data?.remote_api_base_url !== undefined
+          ) {
+            db.prepare(
+              `UPDATE config SET remote_api_base_url = ? WHERE id = 1`,
+            ).run(data.remote_api_base_url);
+          }
+          if (!row?.remote_api_token && data?.remote_api_token !== undefined) {
+            db.prepare(
+              `UPDATE config SET remote_api_token = ? WHERE id = 1`,
+            ).run(data.remote_api_token);
+          }
+          if (
+            !row?.replication_interval_ms &&
+            data?.replication_interval_ms !== undefined
+          ) {
+            db.prepare(
+              `UPDATE config SET replication_interval_ms = ? WHERE id = 1`,
+            ).run(data.replication_interval_ms);
+          }
+          return db
+            .prepare(`SELECT * FROM config WHERE id = 1`)
+            .get() as Config;
+        }
+
+        db.prepare(
+          `INSERT INTO config (id, wansoft_base_url, wansoft_user_code, remote_api_base_url, remote_api_token, replication_interval_ms)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        ).run(
+          1,
+          data?.wansoft_base_url ?? null,
+          data?.wansoft_user_code ?? null,
+          data?.remote_api_base_url ?? null,
+          data?.remote_api_token ?? null,
+          data?.replication_interval_ms ?? null,
         );
-      }
 
-      return {
-        WANSOFT_BASE_URL: raw.WANSOFT_BASE_URL,
-        WANSOFT_USER_CODE: raw.WANSOFT_USER_CODE,
-        REMOTE_API_BASE_URL: raw.REMOTE_API_BASE_URL,
-        REMOTE_API_TOKEN: raw.REMOTE_API_TOKEN,
-        REPLICATION_INTERVAL_MS: interval,
-      };
-    },
-
-    async setConfig(partial): Promise<void> {
-      const stmt = db.prepare(
-        "INSERT INTO config (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
-      );
-      const tx = db.transaction((entries: [string, string][]) => {
-        for (const [key, value] of entries) stmt.run(key, value);
+        return db.prepare(`SELECT * FROM config WHERE id = 1`).get() as Config;
       });
-      const entries = Object.entries(partial).filter(([key]) =>
-        (CONFIG_KEYS as readonly string[]).includes(key),
-      ) as [string, string][];
-      tx(entries);
+
+      return tx();
+    },
+    async updateConfig(data) {
+      const fields = Object.entries(data).filter(([_, v]) => v !== undefined);
+      db.prepare(
+        `UPDATE config SET ${fields.map(([k, _v]) => `${k} = ?`).join(", ")} WHERE id = 1`,
+      ).run(...fields.map(([_, v]) => v));
     },
   };
 }

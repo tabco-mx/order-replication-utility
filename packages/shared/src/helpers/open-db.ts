@@ -9,22 +9,27 @@ let db: Database.Database | undefined;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS config (
-  key   TEXT PRIMARY KEY,
-  value TEXT NOT NULL
+  id                      INTEGER PRIMARY KEY AUTOINCREMENT,
+  wansoft_base_url        TEXT,
+  wansoft_user_code       TEXT,
+  remote_api_base_url     TEXT,
+  remote_api_token        TEXT,
+  replication_interval_ms INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS logs (
   id           INTEGER PRIMARY KEY AUTOINCREMENT,
+  worker_id    INTEGER NOT NULL,
   ts           INTEGER NOT NULL,
   level        TEXT NOT NULL,
   message      TEXT NOT NULL,
-  order_number INTEGER,
   status       TEXT,
-  error        TEXT
+  error        TEXT,
+  order_id     INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_logs_ts ON logs(ts DESC);
 
-CREATE TABLE IF NOT EXISTS replications (
+CREATE TABLE IF NOT EXISTS order_replications (
   order_number   INTEGER NOT NULL,
   operation_date TEXT NOT NULL,
   status         TEXT NOT NULL,
@@ -32,18 +37,15 @@ CREATE TABLE IF NOT EXISTS replications (
   remote_id      TEXT,
   error          TEXT,
   updated_at     INTEGER NOT NULL,
-  PRIMARY KEY (order_number, operation_date)
+  PRIMARY KEY(order_number, operation_date)
 );
-CREATE INDEX IF NOT EXISTS idx_repl_status ON replications(status, updated_at DESC);
+CREATE INDEX IF NOT EXISTS idx_repl_status ON order_replications(status, updated_at DESC);
 
 CREATE TABLE IF NOT EXISTS worker_state (
-  id                INTEGER PRIMARY KEY CHECK (id = 1),
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
   last_cycle_at     INTEGER,
-  active_count      INTEGER NOT NULL DEFAULT 0,
-  last_error        TEXT,
-  restart_requested INTEGER NOT NULL DEFAULT 0
+  last_error        TEXT
 );
-INSERT OR IGNORE INTO worker_state (id) VALUES (1);
 `;
 
 // Open (or reuse) the shared connection. Creates data/ and runs migrations on first call.

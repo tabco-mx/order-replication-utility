@@ -1,17 +1,16 @@
 import type Database from "better-sqlite3";
-import type { ReplicationCounts } from "../types/replication-counts.type.js";
-import type { ReplicationRow } from "../types/replication-row.type.js";
-import type { ReplicationsRepo } from "../types/replications-repo.type.js";
+import type { Replication } from "../types/order-replication.type.js";
+import type { ReplicationsRepo } from "../types/order-replications-repo.type.js";
 
-export function createSqliteReplicationsRepo({
+export function createSqliteOrderReplicationsRepo({
   db,
 }: {
   db: Database.Database;
 }): ReplicationsRepo {
   return {
-    async upsertReplication(row): Promise<void> {
+    async upsertReplication(data) {
       db.prepare(
-        `INSERT INTO replications
+        `INSERT INTO order_replications
            (order_number, operation_date, status, action, remote_id, error, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT(order_number, operation_date) DO UPDATE SET
@@ -21,58 +20,59 @@ export function createSqliteReplicationsRepo({
            error      = excluded.error,
            updated_at = excluded.updated_at`,
       ).run(
-        row.order_number,
-        row.operation_date,
-        row.status,
-        row.action ?? null,
-        row.remote_id ?? null,
-        row.error ?? null,
+        data.order_number,
+        data.operation_date,
+        data.status,
+        data.action ?? null,
+        data.remote_id ?? null,
+        data.error ?? null,
         Date.now(),
       );
     },
 
-    async listActive(): Promise<ReplicationRow[]> {
+    async listActive() {
       return db
         .prepare(
-          `SELECT * FROM replications
+          `SELECT * FROM order_replications
            WHERE status IN ('pending', 'replicating')
            ORDER BY updated_at DESC`,
         )
-        .all() as ReplicationRow[];
+        .all() as Replication[];
     },
 
-    async listRecent(limit = 20): Promise<ReplicationRow[]> {
+    async listRecent(limit = 20) {
       return db
         .prepare(
-          `SELECT * FROM replications
+          `SELECT * FROM order_replications
            WHERE status IN ('success', 'noop', 'failed')
            ORDER BY updated_at DESC LIMIT ?`,
         )
-        .all(limit) as ReplicationRow[];
+        .all(limit) as Replication[];
     },
 
-    async listFailed(limit = 20): Promise<ReplicationRow[]> {
+    async listFailed(limit = 20) {
       return db
         .prepare(
-          "SELECT * FROM replications WHERE status = 'failed' ORDER BY updated_at DESC LIMIT ?",
+          "SELECT * FROM order_replications WHERE status = 'failed' ORDER BY updated_at DESC LIMIT ?",
         )
-        .all(limit) as ReplicationRow[];
+        .all(limit) as Replication[];
     },
 
-    async counts(): Promise<ReplicationCounts> {
+    async counts() {
       const row = db
         .prepare(
           `SELECT
              SUM(CASE WHEN status IN ('success', 'noop') THEN 1 ELSE 0 END) AS done,
              SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END)            AS failed,
              SUM(CASE WHEN status IN ('pending', 'replicating') THEN 1 ELSE 0 END) AS active
-           FROM replications`,
+           FROM order_replications`,
         )
         .get() as {
         done: number | null;
         failed: number | null;
         active: number | null;
       };
+
       return {
         totalReplicated: row.done ?? 0,
         failures: row.failed ?? 0,
@@ -80,7 +80,7 @@ export function createSqliteReplicationsRepo({
       };
     },
 
-    async clearReplications(): Promise<void> {
+    async clearReplications() {
       db.prepare("DELETE FROM replications").run();
     },
   };

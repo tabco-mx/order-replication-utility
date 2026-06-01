@@ -1,6 +1,6 @@
-import type { ReplicationStatus } from "./replication-status.type.js";
+import type { ReplicationStatus } from "./order-replication-status.type.js";
 
-export interface UpsertReplication {
+export interface ReplicationUpsert {
   order_number: number;
   operation_date: string;
   status: ReplicationStatus;
