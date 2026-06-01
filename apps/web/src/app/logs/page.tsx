@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { listLogs, countLogs } from "@/lib/data";
+import { logsRepo } from "@/lib/data";
 import { Badge, fmtTime } from "../components/ui";
 
 export const dynamic = "force-dynamic";
@@ -14,8 +14,10 @@ export default async function LogsPage({
   const page = Math.max(Number(sp.page) || 1, 1);
   const offset = (page - 1) * pageSize;
 
-  const rows = listLogs({ limit: pageSize, offset });
-  const total = countLogs();
+  const { listLogs, countLogs } = logsRepo;
+
+  const rows = await listLogs({ limit: pageSize, offset });
+  const total = await countLogs();
   const totalPages = Math.max(Math.ceil(total / pageSize), 1);
 
   return (

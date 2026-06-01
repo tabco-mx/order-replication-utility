@@ -1,4 +1,4 @@
-import { getConfig, CONFIG_KEYS, type ConfigKey } from "@/lib/data";
+import { configRepo, CONFIG_KEYS, type ConfigKey } from "@/lib/data";
 import { saveConfig } from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
@@ -22,11 +22,12 @@ const FIELDS: Record<
   },
 };
 
-export default function ConfigPage() {
-  const raw = getConfig();
+export default async function ConfigPage() {
+  const { getConfig } = configRepo;
+  const config = await getConfig();
 
   return (
-    <div>
+    <main className="max-w-6xl mx-auto px-4 py-6 h-screen pt-16 flex flex-col">
       <h1 className="text-xl font-semibold mb-4">Config</h1>
       <form
         action={saveConfig}
@@ -35,7 +36,7 @@ export default function ConfigPage() {
         {CONFIG_KEYS.map((key) => {
           const f = FIELDS[key];
           // Never render the stored token; the field stays blank unless a new value is typed.
-          const value = key === "REMOTE_API_TOKEN" ? "" : raw[key];
+          const value = key === "REMOTE_API_TOKEN" ? "" : config[key];
           return (
             <label key={key} className="block mb-4">
               <span className="block text-sm font-medium text-slate-700">
@@ -64,6 +65,6 @@ export default function ConfigPage() {
           needed.
         </p>
       </form>
-    </div>
+    </main>
   );
 }

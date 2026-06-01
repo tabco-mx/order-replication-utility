@@ -3,17 +3,40 @@
 // edits made in the web UI apply on the next tick without a restart. A UI-set restart
 // flag still makes the worker exit so the Windows Service restarts it.
 
+import { createLogger } from "./logger.js";
+import { createReplicateOrderService } from "./replicate-order/services/replicate-order.service.js";
+import { validateConfig } from "./config/helpers/validate-config.js";
+import { createWansoftService } from "./wansoft/services/wansoft.service.js";
 import {
-  getConfig,
-  updateHeartbeat,
-  consumeRestartFlag,
-  upsertReplication,
-  type AppConfig,
-  type Order,
+  openDb,
+  createSqliteConfigRepo,
+  createSqliteReplicationsRepo,
+  createSqliteLogsRepo,
+  createSqliteWorkerStateRepo,
 } from "@app/shared";
-import { logger } from "./logger.js";
-import { getUserId, getOrders, getOrderItems } from "./wansoft/index.js";
-import { replicateOrder } from "./replicate-order/index.js";
+import type { AppConfig, Order } from "@app/shared";
+
+const db = openDb();
+const { getConfig } = createSqliteConfigRepo({
+  db,
+});
+const { replicateOrder } = createReplicateOrderService({ getConfig });
+const logsRepo = createSqliteLogsRepo({
+  db,
+});
+const logger = createLogger({ logsRepo });
+const replicationsRepo = createSqliteReplicationsRepo({
+  db,
+});
+const { upsertReplication } = replicationsRepo;
+const { updateHeartbeat, consumeRestartFlag } = createSqliteWorkerStateRepo({
+  db,
+  logsRepo,
+  replicationsRepo,
+});
+const { getUserId, getOrders, getOrderItems } = createWansoftService({
+  getConfig,
+});
 
 const DAY_MS = 86_400_000;
 const FALLBACK_INTERVAL_MS = 30_000;
@@ -25,7 +48,7 @@ let isRunning = false;
 // Fetch userId once, then refresh only if older than a day.
 async function ensureUserId(config: AppConfig): Promise<string> {
   if (userId === undefined || Date.now() - userIdFetchedAt > DAY_MS) {
-    userId = await getUserId(config);
+    userId = await getUserId();
     userIdFetchedAt = Date.now();
     logger.info(
       `Resolved userId=${userId} for userCode=${config.WANSOFT_USER_CODE}`,
@@ -34,41 +57,21 @@ async function ensureUserId(config: AppConfig): Promise<string> {
   return userId;
 }
 
-function validateConfig(config: AppConfig): void {
-  const errors: string[] = [];
-  if (!config.WANSOFT_USER_CODE) {
-    errors.push("WANSOFT_USER_CODE is required");
-  }
-  if (!config.WANSOFT_BASE_URL) {
-    errors.push("WANSOFT_BASE_URL is required");
-  }
-  if (!config.REMOTE_API_BASE_URL) {
-    errors.push("REMOTE_API_BASE_URL is required");
-  }
-  if (!config.REMOTE_API_TOKEN) {
-    errors.push("REMOTE_API_TOKEN is required");
-  }
-  if (!config.REPLICATION_INTERVAL_MS) {
-    errors.push("REPLICATION_INTERVAL_MS is required");
-  }
-
-  if (errors.length > 0) {
-    throw new Error(errors.join("\n"));
-  }
-}
-
 // Fetch items for one order and replicate it. Writes status rows as it progresses.
 // Throws on failure (caught by allSettled) after recording the failed status.
-async function replicateOne(config: AppConfig, order: Order): Promise<void> {
-  upsertReplication({
+async function replicateOne(order: Order): Promise<void> {
+  await upsertReplication({
     order_number: order.OrderNumber,
     operation_date: order.OperationDate,
     status: "replicating",
   });
   try {
-    const items = await getOrderItems(config, order);
-    const { data } = await replicateOrder(config, { order, items });
-    upsertReplication({
+    const items = await getOrderItems(order);
+    const { data } = await replicateOrder({
+      order,
+      items,
+    });
+    await upsertReplication({
       order_number: order.OrderNumber,
       operation_date: order.OperationDate,
       status: data.action === "noop" ? "noop" : "success",
@@ -85,7 +88,7 @@ async function replicateOne(config: AppConfig, order: Order): Promise<void> {
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    upsertReplication({
+    await upsertReplication({
       order_number: order.OrderNumber,
       operation_date: order.OperationDate,
       status: "failed",
@@ -101,11 +104,12 @@ async function replicateOne(config: AppConfig, order: Order): Promise<void> {
 }
 
 // Exit if the UI requested a restart; the Windows Service brings us back with fresh config.
-function exitIfRestartRequested(): void {
-  if (consumeRestartFlag()) {
-    logger.info("Restart requested — exiting so the service restarts");
-    process.exit(0);
-  }
+async function exitIfRestartRequested() {
+  const restartRequested = await consumeRestartFlag();
+  if (!restartRequested) return;
+
+  logger.info("Restart requested — exiting so the service restarts");
+  process.exit(0);
 }
 
 // One poll cycle. Reads current config from the DB, returns the interval to wait next.
@@ -119,22 +123,22 @@ async function runCycle(): Promise<number> {
   let activeCount = 0;
   let lastError: string | null = null;
   try {
-    exitIfRestartRequested();
+    await exitIfRestartRequested();
 
     // Re-read config every cycle so UI edits apply without a restart.
-    const config = getConfig();
+    const config = await getConfig();
     validateConfig(config);
 
     intervalMs = config.REPLICATION_INTERVAL_MS;
 
     const id = await ensureUserId(config);
-    const orders = await getOrders(config, id);
+    const orders = await getOrders(id);
     activeCount = orders.length;
     logger.info(`Cycle start: ${orders.length} open order(s)`);
 
     // Mark all fetched orders pending so the UI shows them immediately.
     for (const order of orders) {
-      upsertReplication({
+      await upsertReplication({
         order_number: order.OrderNumber,
         operation_date: order.OperationDate,
         status: "pending",
@@ -142,7 +146,7 @@ async function runCycle(): Promise<number> {
     }
 
     const results = await Promise.allSettled(
-      orders.map((order) => replicateOne(config, order)),
+      orders.map((order) => replicateOne(order)),
     );
 
     let ok = 0;
@@ -157,7 +161,7 @@ async function runCycle(): Promise<number> {
     lastError = err instanceof Error ? err.message : String(err);
     logger.error("Cycle aborted", { err });
   } finally {
-    updateHeartbeat({
+    await updateHeartbeat({
       last_cycle_at: Date.now(),
       active_count: activeCount,
       last_error: lastError,

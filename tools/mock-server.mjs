@@ -47,6 +47,17 @@ const orders = [
     Total: 102.08,
   },
   {
+    OrderNumber: 98,
+    OperationDate: "2026-05-26T00:00:00",
+    OpenedDate: "2026-05-26T20:03:51.753",
+    TableNumber: "14",
+    Discount: 0,
+    Subtotal: 222.41,
+    IVA: 35.59,
+    IEPS: 0,
+    Total: 'invalid',
+  },
+  {
     OperationDate: "2026-05-26T00:00:00",
     OrderNumber: 99,
     OpenedDate: "2026-05-26T20:10:00.000",

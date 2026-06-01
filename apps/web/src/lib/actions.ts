@@ -5,16 +5,17 @@
 
 import { revalidatePath } from "next/cache";
 import {
-  setConfig,
-  requestRestart,
-  clearLogs as clearLogsDb,
-  clearReplications,
-  clearAll,
   CONFIG_KEYS,
-  type ConfigKey,
-} from "@app/shared";
+  ConfigKey,
+  configRepo,
+  logsRepo,
+  replicationsRepo,
+  workerStateRepo,
+} from "./data";
 
 export async function saveConfig(formData: FormData): Promise<void> {
+  const { setConfig } = configRepo;
+
   const partial: Partial<Record<ConfigKey, string>> = {};
   for (const key of CONFIG_KEYS) {
     const value = formData.get(key);
@@ -24,30 +25,38 @@ export async function saveConfig(formData: FormData): Promise<void> {
     if (key === "REMOTE_API_TOKEN" && value.trim() === "") continue;
     partial[key] = value;
   }
-  setConfig(partial);
+  await setConfig(partial);
   revalidatePath("/config");
 }
 
 export async function clearLogs(): Promise<void> {
-  clearLogsDb();
+  const { clearLogs } = logsRepo;
+
+  await clearLogs();
   revalidatePath("/logs");
   revalidatePath("/maintenance");
 }
 
 export async function clearHistory(): Promise<void> {
-  clearReplications();
+  const { clearReplications } = replicationsRepo;
+
+  await clearReplications();
   revalidatePath("/");
   revalidatePath("/maintenance");
 }
 
 export async function clearDatabase(): Promise<void> {
-  clearAll();
+  const { clearAll } = workerStateRepo;
+
+  await clearAll();
   revalidatePath("/");
   revalidatePath("/logs");
   revalidatePath("/maintenance");
 }
 
 export async function restartWorker(): Promise<void> {
-  requestRestart();
+  const { requestRestart } = workerStateRepo;
+
+  await requestRestart();
   revalidatePath("/maintenance");
 }

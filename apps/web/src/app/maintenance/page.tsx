@@ -1,5 +1,10 @@
-import { dbSizeBytes } from "@/lib/data";
-import { clearLogs, clearHistory, clearDatabase, restartWorker } from "@/lib/actions";
+import { logsRepo } from "@/lib/data";
+import {
+  clearLogs,
+  clearHistory,
+  clearDatabase,
+  restartWorker,
+} from "@/lib/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +29,13 @@ function ActionButton({
   );
 }
 
-export default function MaintenancePage() {
-  const dbKb = (dbSizeBytes() / 1024).toFixed(1);
+export default async function MaintenancePage() {
+  const { dbSizeBytes } = logsRepo;
+  const dbSize = await dbSizeBytes();
+  const dbKb = (dbSize / 1024).toFixed(1);
 
   return (
-    <div>
+    <main className="max-w-6xl mx-auto px-4 py-6 h-screen pt-16 flex flex-col">
       <h1 className="text-xl font-semibold mb-4">Maintenance</h1>
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-6 max-w-xl">
         <p className="text-sm text-slate-500 mb-4">
@@ -40,9 +47,10 @@ export default function MaintenancePage() {
         <hr className="my-4 border-slate-200" />
         <ActionButton action={restartWorker} label="Restart worker" />
         <p className="text-xs text-slate-400 mt-2">
-          Restart requests the worker to exit; the Windows Service restarts it within one interval.
+          Restart requests the worker to exit; the Windows Service restarts it
+          within one interval.
         </p>
       </div>
-    </div>
+    </main>
   );
 }

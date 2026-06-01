@@ -1,7 +1,7 @@
 {
   "name": "order-replication-utility",
-  "version": "2.0.0",
-  "description": "Local order replication tool: worker + UI sharing one SQLite DB",
+  "version": "1.0.0",
+  "description": "Order replication utility",
   "private": true,
   "type": "module",
   "engines": {
@@ -13,16 +13,14 @@
   ],
   "scripts": {
     "build": "npm run build -w @app/shared && npm run build -w @app/worker && npm run build -w @app/web",
-    "dev": "concurrently -n worker,web -c blue,green \"npm run dev -w @app/worker\" \"npm run dev -w @app/web\"",
     "worker:install": "node apps/worker/dist/service-install.js",
     "worker:uninstall": "node apps/worker/dist/service-uninstall.js",
-    "seed": "node apps/worker/dist/seed.js",
+    "typecheck": "npm run typecheck -w @app/shared && npm run typecheck -w @app/worker && npm run typecheck -w @app/web",
     "mock": "node tools/mock-server.mjs",
     "mock:seed": "node tools/seed-mock-config.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "concurrently": "^9.1.0",
     "typescript": "^5.7.0"
   }
 }

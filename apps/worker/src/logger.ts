@@ -3,16 +3,7 @@
 // attached so log rows line up with replication rows.
 
 import pino from "pino";
-import { insertLog, type LogLevel } from "@app/shared";
-
-const isProduction = process.env.NODE_ENV === "production";
-
-const pinoLogger = pino({
-  level: process.env.LOG_LEVEL ?? "info",
-  ...(isProduction
-    ? {}
-    : { transport: { target: "pino-pretty", options: { translateTime: "SYS:standard" } } }),
-});
+import type { LogLevel, LogsRepo } from "@app/shared";
 
 interface LogContext {
   err?: unknown;
@@ -20,32 +11,61 @@ interface LogContext {
   status?: string | null;
 }
 
+export interface Logger {
+  info: (message: string, ctx?: LogContext) => void;
+  warn: (message: string, ctx?: LogContext) => void;
+  error: (message: string, ctx?: LogContext) => void;
+}
+
 function errToString(err: unknown): string {
   if (err instanceof Error) return err.stack ?? `${err.name}: ${err.message}`;
   return String(err);
 }
 
-function emit(level: LogLevel, message: string, ctx?: LogContext): void {
-  const error = ctx?.err !== undefined ? errToString(ctx.err) : null;
-  // Mirror to console via pino (with the error object for a proper stack).
-  if (ctx?.err !== undefined) pinoLogger[level]({ err: ctx.err }, message);
-  else pinoLogger[level](message);
-  // Mirror to DB for the UI. Never let a logging failure crash the worker.
-  try {
-    insertLog({
-      level,
-      message,
-      order_number: ctx?.order_number ?? null,
-      status: ctx?.status ?? null,
-      error,
-    });
-  } catch {
-    pinoLogger.warn("failed to persist log row");
-  }
-}
+export function createLogger({
+  logsRepo,
+  nodeEnv = process.env.NODE_ENV,
+  logLevel = process.env.LOG_LEVEL ?? "info",
+}: {
+  logsRepo: LogsRepo;
+  nodeEnv?: string;
+  logLevel?: string;
+}): Logger {
+  const isProduction = nodeEnv === "production";
+  const pinoLogger = pino({
+    level: logLevel,
+    ...(isProduction
+      ? {}
+      : {
+          transport: {
+            target: "pino-pretty",
+            options: { translateTime: "SYS:standard" },
+          },
+        }),
+  });
 
-export const logger = {
-  info: (message: string, ctx?: LogContext) => emit("info", message, ctx),
-  warn: (message: string, ctx?: LogContext) => emit("warn", message, ctx),
-  error: (message: string, ctx?: LogContext) => emit("error", message, ctx),
-};
+  function emit(level: LogLevel, message: string, ctx?: LogContext): void {
+    const error = ctx?.err !== undefined ? errToString(ctx.err) : null;
+    // Mirror to console via pino (with the error object for a proper stack).
+    if (ctx?.err !== undefined) pinoLogger[level]({ err: ctx.err }, message);
+    else pinoLogger[level](message);
+    // Mirror to DB for the UI. Never let a logging failure crash the worker.
+    void logsRepo
+      .insertLog({
+        level,
+        message,
+        order_number: ctx?.order_number ?? null,
+        status: ctx?.status ?? null,
+        error,
+      })
+      .catch(() => {
+        pinoLogger.warn("failed to persist log row");
+      });
+  }
+
+  return {
+    info: (message, ctx) => emit("info", message, ctx),
+    warn: (message, ctx) => emit("warn", message, ctx),
+    error: (message, ctx) => emit("error", message, ctx),
+  };
+}

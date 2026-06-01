@@ -2,17 +2,25 @@
 // The "server-only" import guarantees this module never ends up in a client bundle.
 import "server-only";
 
-export {
-  getWorkerState,
-  counts,
-  dbSizeBytes,
-  listActive,
-  listRecent,
-  listLogs,
-  countLogs,
-  getConfig,
-  CONFIG_KEYS,
+import {
+  openDb,
+  createSqliteLogsRepo,
+  createSqliteReplicationsRepo,
+  createSqliteWorkerStateRepo,
+  createSqliteConfigRepo,
 } from "@app/shared";
+
+export { CONFIG_KEYS } from "@app/shared";
+
+const db = openDb();
+export const configRepo = createSqliteConfigRepo({ db });
+export const logsRepo = createSqliteLogsRepo({ db });
+export const replicationsRepo = createSqliteReplicationsRepo({ db });
+export const workerStateRepo = createSqliteWorkerStateRepo({
+  db,
+  logsRepo,
+  replicationsRepo,
+});
 
 export type {
   WorkerState,

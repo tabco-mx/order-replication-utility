@@ -9,14 +9,15 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
-    "dev": "tsc --watch"
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "build": "npm run clean && tsc",
+    "dev": "npm run build -- --watch",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "better-sqlite3": "^11.8.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
-    "nodemon": "^3.1.14"
+    "@types/better-sqlite3": "^7.6.12"
   }
 }
