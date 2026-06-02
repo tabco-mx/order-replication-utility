@@ -27,3 +27,12 @@ export type ReplicateOrderResult = {
     order_id: string;
   };
 };
+
+export type GetLinkedAndOpenOrdersResult = {
+  data: Array<{
+    user_id: string;
+    order_id: string;
+    order_number: number;
+    operation_date: string;
+  }>;
+};

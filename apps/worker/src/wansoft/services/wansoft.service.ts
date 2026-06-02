@@ -46,9 +46,23 @@ export function createWansoftService({ baseUrl }: { baseUrl: string }) {
     );
   }
 
+  // Check if the order has associated sale.
+  async function getHasAssociatedSale(order: {
+    orderNumber: number;
+    operationDate: string;
+  }): Promise<boolean> {
+    const result = await wansoftFetch<number>(
+      `/WebApi/api/order/HasAssociatedSale?orderNumber=${order.orderNumber}&operationDate=${encodeURIComponent(toWansoftDate(order.operationDate))}`,
+      { method: "POST" },
+    );
+
+    return result === 1;
+  }
+
   return {
     getUserId,
     getOrders,
     getOrderItems,
+    getHasAssociatedSale,
   };
 }

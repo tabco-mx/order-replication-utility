@@ -8,8 +8,8 @@ import {
 } from "@app/shared";
 import { createLogger } from "./logger.js";
 import { createWansoftService } from "./wansoft/services/wansoft.service.js";
-import { createReplicateOrderService } from "./remote-api/services/replicate-order.service.js";
 import { getConfigErrors, isValidConfig } from "./helpers/is-valid-config.js";
+import { createRemoteApiService } from "./remote-api/services/remote-api.service.js";
 
 const FALLBACK_INTERVAL_MS = 30_000;
 
@@ -61,7 +61,8 @@ async function main(): Promise<void> {
         const wansoftService = createWansoftService({
           baseUrl: config.wansoft_base_url,
         });
-        const replicateOrderService = createReplicateOrderService({
+
+        const remoteApiService = createRemoteApiService({
           baseUrl: config.remote_api_base_url,
           apiToken: config.remote_api_token,
         });
@@ -71,12 +72,7 @@ async function main(): Promise<void> {
         const userId = await wansoftService.getUserId(config.wansoft_user_code);
         logger.debug(`Got userId=${userId}`);
 
-        // Get open orders from Wansoft
-        logger.debug("Getting open orders...");
-        const orders = await wansoftService.getOrders(userId);
-        logger.debug(`Got ${orders.length} open orders`);
-
-        // Replicate each order
+        // Replicate each order and close linked orders
         const replicateOrder = async (order: Order) => {
           const childLogger = logger.child(
             {},
@@ -94,7 +90,7 @@ async function main(): Promise<void> {
             const items = await wansoftService.getOrderItems(order);
             childLogger.debug(`Got ${items.length} order items`);
 
-            const result = await replicateOrderService.replicateOrder({
+            const result = await remoteApiService.replicateOrder({
               order,
               items,
             });
@@ -105,7 +101,66 @@ async function main(): Promise<void> {
           }
         };
 
-        await Promise.allSettled(orders.map((order) => replicateOrder(order)));
+        const replicateOrders = async () => {
+          logger.debug("Getting linked and open orders...");
+          const orders = await wansoftService.getOrders(userId);
+          logger.debug(`Got ${orders.length} open orders`);
+
+          await Promise.allSettled(orders.map((order) => replicateOrder(order)));
+        };
+
+        const closeLinkedOrder = async (order: {
+          user_id: string;
+          order_id: string;
+          order_number: number;
+          operation_date: string;
+        }) => {
+          const childLogger = logger.child(
+            {},
+            {
+              msgPrefix: `[OrderNumber=${order.order_number}, OperationDate=${order.operation_date}] `,
+            },
+          );
+
+          try {
+            const hasAssociatedSale = await wansoftService.getHasAssociatedSale(
+              {
+                orderNumber: order.order_number,
+                operationDate: order.operation_date,
+              },
+            );
+            if (!hasAssociatedSale) return;
+
+            childLogger.debug(`Closing linked order ${order.order_id}...`);
+            await remoteApiService.closeLinkedOrder(order.order_id);
+            childLogger.debug(`Closed linked order ${order.order_id}`);
+          } catch (err) {
+            childLogger.error({ err }, "Close order failed");
+          }
+        };
+
+        const closeLinkedOrders = async () => {
+          const linkedAndOpenOrders =
+            await remoteApiService.getLinkedAndOpenOrders();
+
+          if (!linkedAndOpenOrders.data.length) {
+            logger.debug("No linked orders to close");
+            return;
+          }
+
+          logger.debug(
+            `Closing ${linkedAndOpenOrders.data.length} linked orders...`,
+          );
+
+          await Promise.allSettled(
+            linkedAndOpenOrders.data.map((order) => closeLinkedOrder(order)),
+          );
+        };
+
+        const replicateOrderPs = replicateOrders();
+        const closeLinkedOrdersPs = closeLinkedOrders();
+
+        await Promise.allSettled([replicateOrderPs, closeLinkedOrdersPs]);
 
         logger.debug(`Cycle done, next cycle in ${intervalMs}ms`);
         return config.replication_interval_ms;

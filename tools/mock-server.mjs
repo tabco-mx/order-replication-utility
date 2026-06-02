@@ -55,7 +55,8 @@ const orders = [
     Subtotal: 222.41,
     IVA: 35.59,
     IEPS: 0,
-    Total: 'invalid',
+    // Total: 'invalid',
+    Total: 1000,
   },
   {
     OperationDate: "2026-05-26T00:00:00",
