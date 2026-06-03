@@ -20,7 +20,7 @@ export async function closeLinkedOrder({
   const childLogger = logger.child(
     {},
     {
-      msgPrefix: getLinkedOrderLogPrefix(order),
+      msgPrefix: logger.msgPrefix + getLinkedOrderLogPrefix(order),
     },
   );
 
@@ -31,9 +31,9 @@ export async function closeLinkedOrder({
     });
     if (!hasAssociatedSale) return;
 
-    childLogger.debug(`Closing linked order ${order.order_id}...`);
+    childLogger.trace(`Closing linked order ${order.order_id}...`);
     await remoteApiService.closeLinkedOrder(order.order_id);
-    childLogger.debug(`Closed linked order ${order.order_id}`);
+    childLogger.trace(`Closed linked order ${order.order_id}`);
   } catch (err) {
     childLogger.error({ err }, "Close order failed");
   }
@@ -48,19 +48,28 @@ export async function closeLinkedOrders({
   remoteApiService: RemoteApiService;
   wansoftService: WansoftService;
 }): Promise<void> {
+  const childLogger = logger.child(
+    {},
+    {
+      msgPrefix: "[closeLinkedOrders] ",
+    },
+  );
+
   const linkedAndOpenOrders = await remoteApiService.getLinkedAndOpenOrders();
 
   if (!linkedAndOpenOrders.data.length) {
-    logger.debug("No linked orders to close");
+    childLogger.debug("No linked orders to close");
     return;
   }
 
-  logger.debug(`Closing ${linkedAndOpenOrders.data.length} linked orders...`);
+  childLogger.debug(
+    `Closing ${linkedAndOpenOrders.data.length} linked orders...`,
+  );
 
   await Promise.allSettled(
     linkedAndOpenOrders.data.map((order) =>
       closeLinkedOrder({
-        logger,
+        logger: childLogger,
         order,
         remoteApiService,
         wansoftService,

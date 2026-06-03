@@ -23,63 +23,25 @@ function json(res, code, obj) {
   res.end(JSON.stringify(obj));
 }
 
-const orders = [
-  {
-    OperationDate: "2026-05-26T00:00:00",
-    OrderNumber: 16,
-    OpenedDate: "2026-05-26T20:03:51.753",
-    TableNumber: "14",
-    Discount: 0,
-    Subtotal: 222.41,
-    IVA: 35.59,
-    IEPS: 0,
-    Total: 258,
-  },
-  {
-    OperationDate: "2026-05-26T00:00:00",
-    OrderNumber: 17,
-    OpenedDate: "2026-05-26T20:05:00.000",
-    TableNumber: "3",
-    Discount: 0,
-    Subtotal: 88,
-    IVA: 14.08,
-    IEPS: 0,
-    Total: 102.08,
-  },
-  {
-    OrderNumber: 98,
-    OperationDate: "2026-05-26T00:00:00",
-    OpenedDate: "2026-05-26T20:03:51.753",
-    TableNumber: "14",
-    Discount: 0,
-    Subtotal: 222.41,
-    IVA: 35.59,
-    IEPS: 0,
-    // Total: 'invalid',
-    Total: 1000,
-  },
-  {
-    OperationDate: "2026-05-26T00:00:00",
-    OrderNumber: 99,
-    OpenedDate: "2026-05-26T20:10:00.000",
-    TableNumber: "7",
-    Discount: 0,
-    Subtotal: 100,
-    IVA: 16,
-    IEPS: 0,
-    Total: 116,
-  },
-];
+const orders = new Array(50).fill(null).map((_, i) => ({
+  OperationDate: "2026-05-26T00:00:00",
+  OrderNumber: i + 1,
+  OpenedDate: "2026-05-26T20:10:00.000",
+  TableNumber: "7",
+  Discount: 0,
+  Subtotal: 100,
+  IVA: 16,
+  IEPS: 0,
+  Total: 116,
+}));
 
-const items = [
-  {
-    ConsecutiveId: 53206,
-    DishId: 47,
-    Quantity: 1,
-    Description: "CRUCIO (Chicken Bacon Burger)",
-    Total: 179,
-  },
-];
+const items = new Array(10).fill(null).map((_, i) => ({
+  ConsecutiveId: 53206 + i,
+  DishId: 47,
+  Quantity: 1,
+  Description: "CRUCIO (Chicken Bacon Burger)",
+  Total: 179,
+}));
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -92,10 +54,11 @@ createServer(async (req, res) => {
     case "/WebApi/api/user/SelUser":
       return json(res, 200, { Result: "10" });
     case "/WebApi/api/order/getorders":
-      await sleep(10_000);
       return json(res, 200, { Result: orders });
     case "/WebApi/api/order/GetOrderDetail":
       return json(res, 200, { Result: items });
+    case "/WebApi/api/order/HasAssociatedSale":
+      return json(res, 200, { Result: 1 });
     default:
       return json(res, 404, { error: { message: "not found" } });
   }
@@ -104,8 +67,6 @@ createServer(async (req, res) => {
 );
 
 createServer(async (req, res) => {
-  await sleep(10_000);
-
   let body = "";
   req.on("data", (c) => (body += c));
   req.on("end", () => {

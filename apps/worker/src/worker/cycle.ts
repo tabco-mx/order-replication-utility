@@ -46,9 +46,9 @@ export function createRunCycle({
         apiToken: config.remote_api_token,
       });
 
-      logger.debug("Getting userId...");
+      logger.trace("Getting userId...");
       const userId = await wansoftService.getUserId(config.wansoft_user_code);
-      logger.debug(`Got userId=${userId}`);
+      logger.trace(`Got userId=${userId}`);
 
       await Promise.allSettled([
         replicateOrders({

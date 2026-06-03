@@ -20,23 +20,23 @@ export async function replicateOrder({
   const childLogger = logger.child(
     {},
     {
-      msgPrefix: getOrderLogPrefix(order),
+      msgPrefix: logger.msgPrefix + getOrderLogPrefix(order),
     },
   );
 
   try {
-    childLogger.debug("Replicating order...");
-    childLogger.debug("Getting order items...");
+    childLogger.trace("Replicating order...");
+    childLogger.trace("Getting order items...");
 
     const items = await wansoftService.getOrderItems(order);
-    childLogger.debug(`Got ${items.length} order items`);
+    childLogger.trace(`Got ${items.length} order items`);
 
     const result = await remoteApiService.replicateOrder({
       order,
       items,
     });
 
-    childLogger.debug(result.data, "Replicate order succeeded");
+    childLogger.trace(result.data, "Replicate order succeeded");
   } catch (err) {
     childLogger.error({ err }, "Replicate order failed");
   }
@@ -53,14 +53,21 @@ export async function replicateOrders({
   userId: string;
   wansoftService: WansoftService;
 }): Promise<void> {
-  logger.debug("Getting linked and open orders...");
+  const childLogger = logger.child(
+    {},
+    {
+      msgPrefix: "[replicateOrders] ",
+    },
+  );
+
+  childLogger.debug("Getting linked and open orders...");
   const orders = await wansoftService.getOrders(userId);
-  logger.debug(`Got ${orders.length} open orders`);
+  childLogger.debug(`Got ${orders.length} open orders`);
 
   await Promise.allSettled(
     orders.map((order) =>
       replicateOrder({
-        logger,
+        logger: childLogger,
         order,
         remoteApiService,
         wansoftService,
