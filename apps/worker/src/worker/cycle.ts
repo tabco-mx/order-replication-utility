@@ -14,11 +14,20 @@ export function createRunCycle({
   getOrCreateConfig: GetOrCreateConfig;
   logger: WorkerLogger;
 }): () => Promise<number> {
+  let cycleCount = 0;
+
   return async () => {
+    cycleCount += 1;
     let intervalMs = FALLBACK_INTERVAL_MS;
+    const cycleLogger = logger.child(
+      {},
+      {
+        msgPrefix: `[${cycleCount}] `,
+      },
+    );
 
     try {
-      logger.debug("Cycle start...");
+      cycleLogger.info("Cycle started");
 
       const config = await getOrCreateConfig({
         wansoft_base_url: process.env.WANSOFT_BASE_URL,
@@ -46,28 +55,28 @@ export function createRunCycle({
         apiToken: config.remote_api_token,
       });
 
-      logger.trace("Getting userId...");
       const userId = await wansoftService.getUserId(config.wansoft_user_code);
-      logger.trace(`Got userId=${userId}`);
 
       await Promise.allSettled([
         replicateOrders({
-          logger,
+          logger: cycleLogger,
           remoteApiService,
           userId,
           wansoftService,
         }),
         closeLinkedOrders({
-          logger,
+          logger: cycleLogger,
           remoteApiService,
           wansoftService,
         }),
       ]);
 
-      logger.debug(`Cycle done, next cycle in ${intervalMs}ms`);
       return config.replication_interval_ms;
     } catch (err) {
-      logger.error({ err }, `Cycle aborted, retrying in ${intervalMs}ms`);
+      cycleLogger.error(
+        { err },
+        `Cycle aborted, retrying in ${intervalMs}ms`,
+      );
       return intervalMs;
     }
   };
