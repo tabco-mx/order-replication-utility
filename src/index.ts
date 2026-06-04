@@ -1,8 +1,12 @@
+import "./instrument.js";
+
 import * as env from "./env.js";
 import { createLogger } from "./logger.js";
 import { createRunCycle } from "./worker/cycle.js";
 import { runWorkerLoop } from "./worker/scheduler.js";
 import { Config } from "./worker/types.js";
+
+import { captureException } from "@sentry/node";
 
 async function getConfig(): Promise<Config> {
   return {
@@ -22,6 +26,7 @@ async function main(): Promise<void> {
     runWorkerLoop({ runCycle });
   } catch (err) {
     logger.error({ err }, "Fatal startup error");
+    captureException(err);
     process.exit(1);
   }
 }

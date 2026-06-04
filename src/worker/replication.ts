@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/node";
 import { Order } from "../wansoft/types.js";
 import { getOrderLogPrefix } from "./log-prefix.js";
 import type {
@@ -70,6 +71,7 @@ export async function replicateOrder({
     return { ...baseResult, status: "succeeded", action: result.data.action };
   } catch (err) {
     childLogger.error({ err }, "An error occurred");
+    captureException(err);
     return { ...baseResult, status: "failed", error: getErrorMessage(err) };
   }
 }

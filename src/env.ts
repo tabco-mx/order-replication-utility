@@ -6,6 +6,8 @@ export const WANSOFT_USER_CODE = process.env.WANSOFT_USER_CODE as string;
 export const REMOTE_API_BASE_URL = process.env.REMOTE_API_BASE_URL as string;
 export const REMOTE_API_TOKEN = process.env.REMOTE_API_TOKEN as string;
 export const LOG_LEVEL = process.env.LOG_LEVEL ?? "info";
+export const SENTRY_DSN = process.env.SENTRY_DSN as string;
+export const NODE_ENV = process.env.NODE_ENV ?? "development";
 
 const errors: Array<string> = [];
 

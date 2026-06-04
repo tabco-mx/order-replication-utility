@@ -10,7 +10,7 @@ const { Service } = pkg;
 const here = dirname(fileURLToPath(import.meta.url)); // apps/worker/dist
 const scriptPath = resolve(here, "index.js");
 
-const name = "order-replication-utility";
+const name = "orderreplicationtility.exe";
 
 const svc = new Service({
   name,

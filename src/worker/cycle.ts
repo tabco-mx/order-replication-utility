@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/node";
 import { getConfigErrors, isValidConfig } from "../helpers/is-valid-config.js";
 import { createRemoteApiService } from "../remote-api/services/remote-api.service.js";
 import { createWansoftService } from "../wansoft/services/wansoft.service.js";
@@ -66,6 +67,7 @@ export function createRunCycle({
       return config.replication_interval_ms;
     } catch (err) {
       cycleLogger.error({ err }, `Cycle aborted, retrying in ${intervalMs}ms`);
+      captureException(err);
       return intervalMs;
     }
   };

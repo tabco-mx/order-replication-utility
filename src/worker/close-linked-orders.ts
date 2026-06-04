@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/node";
 import { LinkedOrder } from "../remote-api/types.js";
 import { getOrderLogPrefix } from "./log-prefix.js";
 import type {
@@ -71,6 +72,7 @@ export async function closeLinkedOrder({
     return { ...baseResult, status: "closed" };
   } catch (err) {
     childLogger.error({ err }, "An error occurred");
+    captureException(err);
     return { ...baseResult, status: "failed", error: getErrorMessage(err) };
   }
 }
