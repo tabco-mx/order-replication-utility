@@ -26,7 +26,8 @@ const svc = new Service({
     { name: "WANSOFT_USER_CODE", value: env.WANSOFT_USER_CODE },
     { name: "REMOTE_API_BASE_URL", value: env.REMOTE_API_BASE_URL },
     { name: "REMOTE_API_TOKEN", value: env.REMOTE_API_TOKEN },
-    { name: "LOG_LEVEL", value: env.LOG_LEVEL },
+    { name: "SENTRY_DSN", value: env.SENTRY_DSN },
+    { name: "LOG_LEVEL", value: "info" },
     { name: "NODE_ENV", value: "production" },
   ],
 });
