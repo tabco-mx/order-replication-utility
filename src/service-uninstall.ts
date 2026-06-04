@@ -10,12 +10,14 @@ const { Service } = pkg;
 const here = dirname(fileURLToPath(import.meta.url)); // apps/worker/dist
 const scriptPath = resolve(here, "index.js");
 
+const name = "order-replication-utility";
+
 const svc = new Service({
-  name: "order-worker",
+  name,
   script: scriptPath,
 });
 
-svc.on("uninstall", () => console.log("order-worker uninstalled."));
+svc.on("uninstall", () => console.log(`${name} uninstalled.`));
 svc.on("error", (err: unknown) => console.error("Service error:", err));
 
 svc.uninstall();
