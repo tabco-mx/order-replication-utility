@@ -102,7 +102,7 @@ export async function closeLinkedOrders({
       orders: [],
     };
 
-    childLogger.info(
+    childLogger.debug(
       `Results: found=${summary.found} closed=${summary.closed} skipped=${summary.skipped} failed=${summary.failed}`,
     );
 
@@ -128,7 +128,7 @@ export async function closeLinkedOrders({
     orders: results,
   };
 
-  childLogger.info(
+  childLogger.debug(
     `Results: found=${summary.found} closed=${summary.closed} skipped=${summary.skipped} failed=${summary.failed}`,
   );
 

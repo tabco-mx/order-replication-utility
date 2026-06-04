@@ -17,11 +17,16 @@ export function createWansoftService({ baseUrl }: { baseUrl: string }) {
 
   // Resolve the userId from the configured user code. Done once at startup.
   async function getUserId(userCode: string): Promise<string> {
-    return wansoftFetch<string>("/WebApi/api/user/SelUser", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(userCode),
-    });
+    const result = await wansoftFetch<{ Id: string }>(
+      "/WebApi/api/user/SelUser",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userCode),
+      },
+    );
+
+    return result.Id;
   }
 
   // List open orders for the user.

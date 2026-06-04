@@ -115,7 +115,7 @@ export async function replicateOrders({
     orders: results,
   };
 
-  childLogger.info(
+  childLogger.debug(
     `Results: found=${summary.found} succeeded=${summary.succeeded} (inserted=${summary.inserted} updated=${summary.updated} noop=${summary.noop}) failed=${summary.failed}`,
   );
 

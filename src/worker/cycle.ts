@@ -27,7 +27,7 @@ export function createRunCycle({
     );
 
     try {
-      cycleLogger.info("Cycle started");
+      cycleLogger.debug("Cycle started");
 
       const config = await getConfig();
 
