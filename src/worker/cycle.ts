@@ -6,7 +6,7 @@ import { closeLinkedOrders } from "./close-linked-orders.js";
 import { replicateOrders } from "./replication.js";
 import type { Config, CycleContext, WorkerLogger } from "./types.js";
 import * as Sentry from "@sentry/node";
-import { NODE_ENV } from "../env.js";
+import { FEATURE_FLAG, NODE_ENV } from "../env.js";
 
 export const FALLBACK_INTERVAL_MS = 30_000;
 
@@ -32,7 +32,7 @@ export function createRunCycle({
     );
 
     try {
-      if (!context.stopped_at) {
+      if (!context.stopped_at && !context.feature_flag_enabled_at) {
         cycleLogger.debug("Starting replication cycle");
       }
 
@@ -51,6 +51,42 @@ export function createRunCycle({
         baseUrl: config.remote_api_base_url,
         apiToken: config.remote_api_token,
       });
+
+      const featureFlag = await remoteApiService.getFeatureFlag(FEATURE_FLAG);
+
+      if (!featureFlag.data.enabled_at) {
+        if (!context.feature_flag_enabled_at) {
+          if (NODE_ENV === "development") {
+            cycleLogger.warn(
+              { feature_flag: FEATURE_FLAG },
+              "Feature flag is disabled; pausing order replication until it is enabled",
+            );
+          }
+
+          Sentry.logger.warn(
+            `Feature flag "${FEATURE_FLAG}" is disabled; pausing order replication until it is enabled.`,
+          );
+
+          context.feature_flag_enabled_at = new Date();
+        }
+        return intervalMs;
+      }
+
+      if (context.feature_flag_enabled_at) {
+        cycleLogger.debug(
+          {
+            feature_flag: FEATURE_FLAG,
+            enabled_at: featureFlag.data.enabled_at,
+          },
+          "Feature flag is enabled; resuming order replication",
+        );
+
+        Sentry.logger.info(
+          `Feature flag "${FEATURE_FLAG}" is enabled at ${featureFlag.data.enabled_at}; resuming order replication.`,
+        );
+
+        context.feature_flag_enabled_at = null;
+      }
 
       const userId = await wansoftService.getUserId(config.wansoft_user_code);
 

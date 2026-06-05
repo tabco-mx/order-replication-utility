@@ -3,6 +3,7 @@ import { Order, OrderItem } from "../../wansoft/types.js";
 import {
   ReplicateOrderResult,
   GetLinkedAndOpenOrdersResult,
+  GetFeatureFlagResult,
 } from "../types.js";
 
 export function createRemoteApiService({
@@ -65,6 +66,23 @@ export function createRemoteApiService({
         const error = await parseErrorResponse(res);
         throw new Error(error.message);
       }
+    },
+
+    async getFeatureFlag(name: string): Promise<GetFeatureFlagResult> {
+      const res = await fetch(`${baseUrl}/feature-flags/by-name/${name}`, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+        },
+      });
+
+      if (!res.ok) {
+        // Remote returns { error: { message } } for 400/401 — surface it if present.
+        const error = await parseErrorResponse(res);
+        throw new Error(error.message);
+      }
+
+      return (await res.json()) as GetFeatureFlagResult;
     },
   };
 }

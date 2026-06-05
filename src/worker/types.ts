@@ -14,6 +14,6 @@ export type Config = {
 };
 
 export type CycleContext = {
-  userId: string | null;
   stopped_at: Date | null;
+  feature_flag_enabled_at: Date | null;
 };

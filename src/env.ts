@@ -9,6 +9,7 @@ export const LOG_LEVEL = process.env.LOG_LEVEL ?? "info";
 export const SENTRY_DSN = process.env.SENTRY_DSN as string;
 export const NODE_ENV = process.env.NODE_ENV ?? "development";
 export const SENTRY_DEVELOPMENT = process.env.SENTRY_DEVELOPMENT === "true";
+export const FEATURE_FLAG = "order_replication_utility";
 
 const errors: Array<string> = [];
 

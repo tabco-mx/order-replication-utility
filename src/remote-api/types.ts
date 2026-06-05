@@ -16,3 +16,9 @@ export type LinkedOrder = {
 export type GetLinkedAndOpenOrdersResult = {
   data: LinkedOrder[];
 };
+
+export type GetFeatureFlagResult = {
+  data: {
+    enabled_at: string | null;
+  };
+};

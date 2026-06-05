@@ -27,8 +27,8 @@ async function main(): Promise<void> {
     };
 
     const context: CycleContext = {
-      userId: null,
       stopped_at: null,
+      feature_flag_enabled_at: null,
     };
 
     const runCycle = createRunCycle({ logger, config, context });
