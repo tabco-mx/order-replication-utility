@@ -2,11 +2,22 @@
 //
 //   node tools/mock-server.mjs
 //
-// Wansoft mock  -> http://localhost:8080   (SelUser, getorders, GetOrderDetail)
-// Remote mock   -> http://localhost:8888   (/replicate-order)
+// Wansoft mock  -> http://localhost:8080
+//   POST /WebApi/api/user/SelUser
+//   POST /WebApi/api/order/getorders
+//   POST /WebApi/api/order/GetOrderDetail
+//   POST /WebApi/api/order/HasAssociatedSale
+//
+// Remote mock   -> http://localhost:8888
+//   POST /replicate-order
+//   GET  /linked-and-open-orders
+//   PUT  /close-linked-order/:orderId
 //
 // Behaviour designed to exercise the UI:
 //   - returns a few open orders
+//   - SelUser returns Result:null every fourth request, then restarts the count
+//   - linked/open orders are static fixtures
+//   - HasAssociatedSale returns mixed results by order number
 //   - order 99 always 401s (token rejected) so you can see an isolated failure
 //   - other orders cycle through inserted -> noop on repeat (changed=false) so the
 //     dashboard shows a mix of success/noop over time
@@ -21,6 +32,11 @@ const REMOTE_PORT = Number(process.env.REMOTE_PORT) || 8888;
 function json(res, code, obj) {
   res.writeHead(code, { "Content-Type": "application/json" });
   res.end(JSON.stringify(obj));
+}
+
+function empty(res, code) {
+  res.writeHead(code);
+  res.end();
 }
 
 const orders = new Array(50).fill(null).map((_, i) => ({
@@ -43,22 +59,60 @@ const items = new Array(10).fill(null).map((_, i) => ({
   Total: 179,
 }));
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const linkedAndOpenOrders = [
+  {
+    user_id: "1",
+    order_id: "linked-1",
+    order_number: 1,
+    operation_date: "2026-05-26T00:00:00",
+  },
+  {
+    user_id: "1",
+    order_id: "linked-2",
+    order_number: 2,
+    operation_date: "2026-05-26T00:00:00",
+  },
+  {
+    user_id: "1",
+    order_id: "linked-3",
+    order_number: 3,
+    operation_date: "2026-05-26T00:00:00",
+  },
+];
+
+const linkedOrderIds = new Set(
+  linkedAndOpenOrders.map((order) => order.order_id),
+);
 
 // Track how many times each order has been replicated to alternate inserted -> noop.
 const seen = new Map();
+let selUserRequestCount = 0;
 
 createServer(async (req, res) => {
   const u = new URL(req.url, "http://x");
   switch (u.pathname) {
-    case "/WebApi/api/user/SelUser":
-      return json(res, 200, { Result: "10" });
+    case "/WebApi/api/user/SelUser": {
+      selUserRequestCount += 1;
+
+      if (selUserRequestCount === 4) {
+        selUserRequestCount = 0;
+        return json(res, 200, { Result: null });
+      }
+
+      return json(res, 200, {
+        Result: {
+          Id: 1,
+        },
+      });
+    }
     case "/WebApi/api/order/getorders":
       return json(res, 200, { Result: orders });
     case "/WebApi/api/order/GetOrderDetail":
       return json(res, 200, { Result: items });
-    case "/WebApi/api/order/HasAssociatedSale":
-      return json(res, 200, { Result: 1 });
+    case "/WebApi/api/order/HasAssociatedSale": {
+      const orderNumber = Number(u.searchParams.get("orderNumber"));
+      return json(res, 200, { Result: orderNumber % 2 === 1 ? 1 : 0 });
+    }
     default:
       return json(res, 404, { error: { message: "not found" } });
   }
@@ -67,6 +121,30 @@ createServer(async (req, res) => {
 );
 
 createServer(async (req, res) => {
+  const u = new URL(req.url, "http://x");
+
+  if (req.method === "GET" && u.pathname === "/linked-and-open-orders") {
+    return json(res, 200, { data: linkedAndOpenOrders });
+  }
+
+  if (req.method === "PUT" && u.pathname.startsWith("/close-linked-order/")) {
+    const orderId = decodeURIComponent(
+      u.pathname.slice("/close-linked-order/".length),
+    );
+
+    if (!linkedOrderIds.has(orderId)) {
+      return json(res, 404, {
+        error: { message: `linked order ${orderId} not found` },
+      });
+    }
+
+    return empty(res, 204);
+  }
+
+  if (req.method !== "POST" || u.pathname !== "/replicate-order") {
+    return json(res, 404, { error: { message: "not found" } });
+  }
+
   let body = "";
   req.on("data", (c) => (body += c));
   req.on("end", () => {

@@ -8,6 +8,7 @@ export const REMOTE_API_TOKEN = process.env.REMOTE_API_TOKEN as string;
 export const LOG_LEVEL = process.env.LOG_LEVEL ?? "info";
 export const SENTRY_DSN = process.env.SENTRY_DSN as string;
 export const NODE_ENV = process.env.NODE_ENV ?? "development";
+export const SENTRY_DEVELOPMENT = process.env.SENTRY_DEVELOPMENT === "true";
 
 const errors: Array<string> = [];
 
@@ -31,7 +32,10 @@ if (!REMOTE_API_TOKEN) {
   errors.push("REMOTE_API_TOKEN is required");
 }
 
-if (LOG_LEVEL && !["debug", "info", "warn", "error"].includes(LOG_LEVEL)) {
+if (
+  LOG_LEVEL &&
+  !["trace", "debug", "info", "warn", "error"].includes(LOG_LEVEL)
+) {
   errors.push("LOG_LEVEL must be one of: debug, info, warn, error");
 }
 

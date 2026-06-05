@@ -12,4 +12,8 @@ export type Config = {
   remote_api_token: string;
   replication_interval_ms: number;
 };
-export type GetConfig = () => Promise<Config>;
+
+export type CycleContext = {
+  userId: string | null;
+  stopped_at: Date | null;
+};

@@ -6,6 +6,7 @@ import type {
   WansoftService,
   WorkerLogger,
 } from "./types.js";
+import { NODE_ENV } from "../env.js";
 
 type ReplicateOrderResult = {
   orderNumber: Order["OrderNumber"];
@@ -70,7 +71,9 @@ export async function replicateOrder({
 
     return { ...baseResult, status: "succeeded", action: result.data.action };
   } catch (err) {
-    childLogger.error({ err }, "An error occurred");
+    if (NODE_ENV === "development") {
+      childLogger.error({ err }, "Failed to replicate order");
+    }
     captureException(err);
     return { ...baseResult, status: "failed", error: getErrorMessage(err) };
   }
@@ -86,40 +89,54 @@ export async function replicateOrders({
   remoteApiService: RemoteApiService;
   userId: string;
   wansoftService: WansoftService;
-}): Promise<ReplicateOrdersResult> {
+}): Promise<void> {
   const childLogger = logger.child(
     {},
     {
-      msgPrefix: "[replicateOrders] ",
+      msgPrefix: "[replicate_orders] ",
     },
   );
 
-  const orders = await wansoftService.getOrders(userId);
+  try {
+    const orders = await wansoftService.getOrders(userId);
 
-  const results = await Promise.all(
-    orders.map((order) =>
-      replicateOrder({
-        logger: childLogger,
-        order,
-        remoteApiService,
-        wansoftService,
-      }),
-    ),
-  );
+    const results = await Promise.all(
+      orders.map((order) =>
+        replicateOrder({
+          logger: childLogger,
+          order,
+          remoteApiService,
+          wansoftService,
+        }),
+      ),
+    );
 
-  const summary: ReplicateOrdersResult = {
-    found: orders.length,
-    succeeded: results.filter((result) => result.status === "succeeded").length,
-    failed: results.filter((result) => result.status === "failed").length,
-    inserted: results.filter((result) => result.action === "inserted").length,
-    updated: results.filter((result) => result.action === "updated").length,
-    noop: results.filter((result) => result.action === "noop").length,
-    orders: results,
-  };
+    const summary: ReplicateOrdersResult = {
+      found: orders.length,
+      succeeded: results.filter((result) => result.status === "succeeded")
+        .length,
+      failed: results.filter((result) => result.status === "failed").length,
+      inserted: results.filter((result) => result.action === "inserted").length,
+      updated: results.filter((result) => result.action === "updated").length,
+      noop: results.filter((result) => result.action === "noop").length,
+      orders: results,
+    };
 
-  childLogger.debug(
-    `Results: found=${summary.found} succeeded=${summary.succeeded} (inserted=${summary.inserted} updated=${summary.updated} noop=${summary.noop}) failed=${summary.failed}`,
-  );
-
-  return summary;
+    childLogger.debug(
+      {
+        found: summary.found,
+        succeeded: summary.succeeded,
+        failed: summary.failed,
+        inserted: summary.inserted,
+        updated: summary.updated,
+        noop: summary.noop,
+      },
+      "Finished replicating orders",
+    );
+  } catch (err) {
+    if (NODE_ENV === "development") {
+      childLogger.error({ err }, "Failed to replicate orders");
+    }
+    captureException(err);
+  }
 }

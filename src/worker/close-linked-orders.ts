@@ -6,6 +6,7 @@ import type {
   WansoftService,
   WorkerLogger,
 } from "./types.js";
+import { NODE_ENV } from "../env.js";
 
 type CloseLinkedOrderResult = {
   orderId: LinkedOrder["order_id"];
@@ -71,7 +72,12 @@ export async function closeLinkedOrder({
     await remoteApiService.closeLinkedOrder(order.order_id);
     return { ...baseResult, status: "closed" };
   } catch (err) {
-    childLogger.error({ err }, "An error occurred");
+    if (NODE_ENV === "development") {
+      childLogger.error(
+        { err, order_id: order.order_id },
+        "Failed to close linked order",
+      );
+    }
     captureException(err);
     return { ...baseResult, status: "failed", error: getErrorMessage(err) };
   }
@@ -85,54 +91,71 @@ export async function closeLinkedOrders({
   logger: WorkerLogger;
   remoteApiService: RemoteApiService;
   wansoftService: WansoftService;
-}): Promise<CloseLinkedOrdersResult> {
+}): Promise<void> {
   const childLogger = logger.child(
     {},
     {
-      msgPrefix: "[closeLinkedOrders] ",
+      msgPrefix: "[close_linked_orders] ",
     },
   );
 
-  const linkedAndOpenOrders = await remoteApiService.getLinkedAndOpenOrders();
+  try {
+    const linkedAndOpenOrders = await remoteApiService.getLinkedAndOpenOrders();
 
-  if (!linkedAndOpenOrders.data.length) {
+    if (!linkedAndOpenOrders.data.length) {
+      const summary: CloseLinkedOrdersResult = {
+        found: 0,
+        closed: 0,
+        skipped: 0,
+        failed: 0,
+        orders: [],
+      };
+
+      childLogger.debug(
+        {
+          found: summary.found,
+          closed: summary.closed,
+          skipped: summary.skipped,
+          failed: summary.failed,
+        },
+        "Finished closing linked orders",
+      );
+
+      return;
+    }
+
+    const results = await Promise.all(
+      linkedAndOpenOrders.data.map((order) =>
+        closeLinkedOrder({
+          logger: childLogger,
+          order,
+          remoteApiService,
+          wansoftService,
+        }),
+      ),
+    );
+
     const summary: CloseLinkedOrdersResult = {
-      found: 0,
-      closed: 0,
-      skipped: 0,
-      failed: 0,
-      orders: [],
+      found: linkedAndOpenOrders.data.length,
+      closed: results.filter((result) => result.status === "closed").length,
+      skipped: results.filter((result) => result.status === "skipped").length,
+      failed: results.filter((result) => result.status === "failed").length,
+      orders: results,
     };
 
     childLogger.debug(
-      `Results: found=${summary.found} closed=${summary.closed} skipped=${summary.skipped} failed=${summary.failed}`,
+      {
+        found: summary.found,
+        closed: summary.closed,
+        skipped: summary.skipped,
+        failed: summary.failed,
+      },
+      "Finished closing linked orders",
     );
-
-    return summary;
+  } catch (err) {
+    if (NODE_ENV === "development") {
+      childLogger.error({ err }, "Failed to close linked orders");
+    }
+    captureException(err);
   }
-
-  const results = await Promise.all(
-    linkedAndOpenOrders.data.map((order) =>
-      closeLinkedOrder({
-        logger: childLogger,
-        order,
-        remoteApiService,
-        wansoftService,
-      }),
-    ),
-  );
-
-  const summary: CloseLinkedOrdersResult = {
-    found: linkedAndOpenOrders.data.length,
-    closed: results.filter((result) => result.status === "closed").length,
-    skipped: results.filter((result) => result.status === "skipped").length,
-    failed: results.filter((result) => result.status === "failed").length,
-    orders: results,
-  };
-
-  childLogger.debug(
-    `Results: found=${summary.found} closed=${summary.closed} skipped=${summary.skipped} failed=${summary.failed}`,
-  );
-
-  return summary;
 }
